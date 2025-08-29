@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../models/bus.dart';
+import '../../../models/driver.dart';
+import '../../../models/student.dart';
+import '../../../services/school_service.dart';
 
 class BusListScreen extends StatefulWidget {
   const BusListScreen({super.key});
@@ -9,33 +12,36 @@ class BusListScreen extends StatefulWidget {
 }
 
 class _BusListScreenState extends State<BusListScreen> {
-  final supabase = Supabase.instance.client;
-  late Future<List<Map<String, dynamic>>> _buses;
+  final SchoolService _schoolService = SchoolService();
+  late Future<List<Map<String, dynamic>>> _busesFuture;
 
-  Future<List<Map<String, dynamic>>> _fetchBusList() async {
-    final buses = await supabase
-        .from('buses')
-        .select('*, driver:drivers(*), students:students(*)');
-    return List<Map<String, dynamic>>.from(buses);
+  @override
+  void initState() {
+    super.initState();
+    _loadBuses();
   }
 
-  Future<void> _removeStudent(String studentId, String busId) async {
+  void _loadBuses() {
+    setState(() {
+      _busesFuture = _schoolService.getBusesWithDetails();
+    });
+  }
+
+  Future<void> _removeStudent(String studentId) async {
     final confirm = await _showConfirmationDialog(
-        'Remove Student?', 'Are you sure you want to remove this student?');
+        'Remove Student?', 'Are you sure you want to remove this student from the bus?');
     if (confirm) {
-      await supabase
-          .from('students')
-          .update({'bus_id': null}).eq('id', studentId);
-      setState(() => _buses = _fetchBusList());
+      await _schoolService.unassignStudent(studentId);
+      _loadBuses(); // Refresh the list
     }
   }
 
-  Future<void> _removeDriver(String driverId, String busId) async {
+  Future<void> _removeDriver(String busId) async {
     final confirm = await _showConfirmationDialog(
-        'Remove Driver?', 'Are you sure you want to remove this driver?');
+        'Remove Driver?', 'Are you sure you want to remove this driver from the bus?');
     if (confirm) {
-      await supabase.from('buses').update({'driver_id': null}).eq('id', busId);
-      setState(() => _buses = _fetchBusList());
+      await _schoolService.unassignDriver(busId);
+      _loadBuses(); // Refresh the list
     }
   }
 
@@ -59,25 +65,31 @@ class _BusListScreenState extends State<BusListScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _buses = _fetchBusList();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _buses,
+      future: _busesFuture,
       builder: (context, snapshot) {
-        if (!snapshot.hasData)
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
-        final buses = snapshot.data!;
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No buses found.'));
+        }
+
+        final busesData = snapshot.data!;
         return ListView.builder(
-          itemCount: buses.length,
+          itemCount: busesData.length,
           itemBuilder: (context, index) {
-            final bus = buses[index];
-            final driver = bus['driver'];
-            final students = bus['students'] ?? [];
+            final busData = busesData[index];
+            final bus = Bus.fromMap(busData);
+            final driverData = busData['driver'];
+            final driver = driverData != null ? Driver.fromMap(driverData) : null;
+            final studentsData = busData['students'] as List<dynamic>? ?? [];
+            final students = studentsData.map((s) => Student.fromMap(s)).toList();
+
             return Card(
               margin: const EdgeInsets.all(10),
               child: Padding(
@@ -85,7 +97,7 @@ class _BusListScreenState extends State<BusListScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('🚌 Bus No: ${bus['bus_number']}',
+                    Text('🚌 Plate No: ${bus.plateNumber}',
                         style: const TextStyle(
                             fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
@@ -93,12 +105,10 @@ class _BusListScreenState extends State<BusListScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                              '👨‍✈️ Driver: ${driver['id']} - ${driver['name']}'),
+                          Text('👨‍✈️ Driver: ${driver.name}'),
                           IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () =>
-                                _removeDriver(driver['id'], bus['id']),
+                            onPressed: () => _removeDriver(bus.id),
                           ),
                         ],
                       )
@@ -107,20 +117,20 @@ class _BusListScreenState extends State<BusListScreen> {
                     const Divider(),
                     const Text('🧒 Students:',
                         style: TextStyle(fontWeight: FontWeight.bold)),
-                    for (var student in students)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('${student['id']} - ${student['name']}'),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline,
-                                color: Colors.red),
-                            onPressed: () =>
-                                _removeStudent(student['id'], bus['id']),
-                          ),
-                        ],
-                      ),
-                    if (students.isEmpty) const Text('No students assigned.')
+                    if (students.isNotEmpty)
+                      ...students.map((student) => Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(student.name),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline,
+                                    color: Colors.red),
+                                onPressed: () => _removeStudent(student.id),
+                              ),
+                            ],
+                          ))
+                    else
+                      const Text('No students assigned.')
                   ],
                 ),
               ),

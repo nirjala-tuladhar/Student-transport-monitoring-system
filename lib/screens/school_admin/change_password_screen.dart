@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../supabase_client.dart'; // Make sure this gives you `supabase`
+import '../../services/auth_service.dart';
+import '../../services/school_service.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
-  final VoidCallback onPasswordChanged;
-
-  const ChangePasswordScreen({required this.onPasswordChanged, super.key});
+  final VoidCallback? onPasswordChanged;
+  final String redirectRoute; // where to go after success
+  const ChangePasswordScreen({this.onPasswordChanged, this.redirectRoute = '/login', super.key});
 
   @override
   State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
@@ -15,118 +15,99 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  bool _loading = false;
+  final _authService = AuthService();
+  final _schoolService = SchoolService();
+  bool _isLoading = false;
   String? _errorMessage;
+  bool _success = false;
 
-  Future<void> _changePassword() async {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
-      _loading = true;
+      _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      await supabase.auth.updateUser(
-        UserAttributes(password: _passwordController.text),
+      await _authService.changePassword(_passwordController.text);
+      
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password updated successfully. You can now close this tab.')),
       );
+      // Notify parent if provided
+      widget.onPasswordChanged?.call();
+      // Do not navigate; finish here per requirements.
+      setState(() {
+        _success = true;
+      });
 
-      // Update is_first_login flag here
-      final user = supabase.auth.currentUser;
-      if (user != null) {
-        await supabase
-            .from('school_admin')
-            .update({'is_first_login': false}).eq('user_id', user.id);
-      }
-
-      // Instead of calling directly:
-      // widget.onPasswordChanged();
-
-      // Use this:
-      Future.microtask(() => widget.onPasswordChanged());
     } catch (e) {
       setState(() {
-        _errorMessage = 'Password change failed: $e';
+        _errorMessage = e.toString();
       });
     } finally {
-      setState(() {
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blueGrey.shade50,
+      appBar: AppBar(title: const Text('Set Your Password')),
       body: Center(
         child: SingleChildScrollView(
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            width: 350,
-            child: Card(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              elevation: 10,
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Change Password',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      TextFormField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(
-                          labelText: 'New Password',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (val) => val == null || val.length < 6
-                            ? 'Enter min 6 character password'
-                            : null,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _confirmPasswordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Confirm Password',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (val) => val != _passwordController.text
-                            ? 'Passwords do not match'
-                            : null,
-                      ),
-                      const SizedBox(height: 24),
-                      _loading
-                          ? const CircularProgressIndicator()
-                          : SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: _changePassword,
-                                child: const Text('Change Password'),
-                              ),
-                            ),
-                      if (_errorMessage != null) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          _errorMessage!,
-                          style: const TextStyle(color: Colors.red),
-                        ),
-                      ],
-                    ],
+          padding: const EdgeInsets.all(16.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Change Your Password', style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
+                const SizedBox(height: 20),
+                if (_errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
                   ),
+                if (_success)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12.0),
+                    child: Text('Password updated successfully. You may close this tab.', style: TextStyle(color: Colors.green)),
+                  ),
+                TextFormField(
+                  controller: _passwordController,
+                  decoration: const InputDecoration(labelText: 'New Password'),
+                  obscureText: true,
+                  validator: (v) => v!.length < 6 ? 'Password must be at least 6 characters' : null,
                 ),
-              ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _confirmPasswordController,
+                  decoration: const InputDecoration(labelText: 'Confirm New Password'),
+                  obscureText: true,
+                  validator: (v) => v != _passwordController.text ? 'Passwords do not match' : null,
+                ),
+                const SizedBox(height: 24),
+                _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : ElevatedButton(
+                        onPressed: _submit,
+                        child: const Text('Save Password'),
+                      ),
+              ],
             ),
           ),
         ),

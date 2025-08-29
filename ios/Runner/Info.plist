@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Bus Panel needs your location to update bus position.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Bus Panel requires location access to update bus position while in use.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Bus Panel needs location access.</string>
 </dict>
 </plist>

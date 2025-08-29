@@ -1,5 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:student_transport_monitoring_system/services/auth_service.dart';
+import 'package:student_transport_monitoring_system/services/school_service.dart';
 import '../../supabase_client.dart';
 
 class CreateSchoolAdminScreen extends StatefulWidget {
@@ -14,13 +16,15 @@ class _CreateSchoolAdminScreenState extends State<CreateSchoolAdminScreen> {
   final _formKey = GlobalKey<FormState>();
   final _schoolNameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _authService = AuthService();
+  final _schoolService = SchoolService();
 
   bool _loading = false;
   String? _errorMessage;
-  String? _tempPassword;
   String? _successMessage;
 
-  String generateTempPassword({int length = 8}) {
+  // Generates a random, secure password for one-time use during invitation.
+  String generateSecurePassword({int length = 12}) {
     const chars =
         'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#\$%&*!';
     final rand = Random.secure();
@@ -35,47 +39,42 @@ class _CreateSchoolAdminScreenState extends State<CreateSchoolAdminScreen> {
       _loading = true;
       _errorMessage = null;
       _successMessage = null;
-      _tempPassword = generateTempPassword();
     });
 
     final schoolName = _schoolNameController.text.trim();
     final email = _emailController.text.trim();
 
     try {
-      // Step 1: Sign up the school admin user
-      final authResponse = await supabase.auth.signUp(
-        email: email,
-        password: _tempPassword!,
+      // 1) Create the school first (admin client bypasses RLS)
+      final schoolResponse = await _schoolService.createSchool(schoolName);
+      final String schoolId = schoolResponse['id'] as String;
+
+      // 2) Invite the user and attach school metadata so it shows in Authentication -> Users
+      final newUser = await _authService.inviteUserByEmail(
+        email,
+        'school_admin',
+        schoolName: schoolName,
+        schoolId: schoolId,
       );
 
-      if (authResponse.user == null) {
-        setState(() => _errorMessage = 'Failed to create user.');
-        return;
-      }
-
-      // Step 2: Insert into 'school_admin' table
-      await supabase.from('school_admin').insert({
-        'school_name': schoolName,
-        'email': email,
-        'user_id': authResponse.user!.id,
-      });
+      // 3) Create the school_admin link row
+      await _authService.createSchoolAdmin(newUser.id, schoolId);
 
       setState(() {
-        _successMessage =
-            'Created successfully!\nTemp Password: $_tempPassword';
+        _successMessage = 'Invitation sent to $email for $schoolName';
         _schoolNameController.clear();
         _emailController.clear();
       });
 
-      Future.delayed(const Duration(seconds: 10), () {
-        Navigator.pop(context);
+      // Optionally, navigate back after a delay.
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) Navigator.pop(context);
       });
-    } catch (e, stacktrace) {
-      print('❌ Unexpected error: $e');
-      print('🧱 Stacktrace: $stacktrace');
-      setState(() => _errorMessage = 'Unexpected error. Check console.');
+
+    } catch (e) {
+      setState(() => _errorMessage = 'An error occurred: $e');
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -153,7 +152,7 @@ class _CreateSchoolAdminScreenState extends State<CreateSchoolAdminScreen> {
                       child: _loading
                           ? const CircularProgressIndicator(color: Colors.white)
                           : const Text(
-                              'Create School Admin',
+                              'Send Invitation',
                               style:
                                   TextStyle(fontSize: 16, color: Colors.white),
                             ),

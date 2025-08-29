@@ -25,7 +25,7 @@ class _SuperadminDashboardScreenState extends State<SuperadminDashboardScreen> {
   Future<void> fetchSchoolAdmins() async {
     setState(() => loadingAdmins = true);
     try {
-      final response = await supabase.from('school_admin').select();
+      final response = await supabase.from('school_admins').select();
       schoolAdmins = List<Map<String, dynamic>>.from(response);
     } catch (e) {
       print('Error fetching school admins: $e');
@@ -81,21 +81,7 @@ class _SuperadminDashboardScreenState extends State<SuperadminDashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Password Reset
-              Card(
-                elevation: 4,
-                color: const Color(0xFFF0F0F0),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  title: const Text('Reset Password'),
-                  trailing: ElevatedButton(
-                    onPressed: resetPassword,
-                    child: const Text('Send Link'),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
+              // Removed Password Reset section as requested
 
               // School Admin List with Edit/Delete
               Card(
@@ -172,7 +158,7 @@ class _SuperadminDashboardScreenState extends State<SuperadminDashboardScreen> {
                                               if (confirm == true) {
                                                 try {
                                                   await supabase
-                                                      .from('school_admin')
+                                                      .from('school_admins')
                                                       .delete()
                                                       .eq('id', admin['id']);
                                                   ScaffoldMessenger.of(context)
@@ -226,7 +212,7 @@ class _SuperadminDashboardScreenState extends State<SuperadminDashboardScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Summary Section
+              // Simple Schools list
               Card(
                 elevation: 6,
                 color: const Color(0xFFF0F0F0),
@@ -237,71 +223,27 @@ class _SuperadminDashboardScreenState extends State<SuperadminDashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Summary',
+                      const Text('Schools',
                           style: TextStyle(
                               fontSize: 18, fontWeight: FontWeight.bold)),
                       const Divider(),
-                      Text('Total Schools: ${schools.length}'),
-                      const SizedBox(height: 10),
-                      Table(
-                        columnWidths: const {
-                          0: FlexColumnWidth(2),
-                          1: FlexColumnWidth(1),
-                          2: FlexColumnWidth(1),
-                          3: FlexColumnWidth(2),
-                        },
-                        border: TableBorder.all(color: Colors.grey),
-                        children: [
-                          const TableRow(
-                            decoration: BoxDecoration(color: Colors.blueGrey),
-                            children: [
-                              Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Text('School',
-                                    style: TextStyle(color: Colors.white)),
-                              ),
-                              Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Text('Students',
-                                    style: TextStyle(color: Colors.white)),
-                              ),
-                              Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Text('Drivers',
-                                    style: TextStyle(color: Colors.white)),
-                              ),
-                              Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Text('Address',
-                                    style: TextStyle(color: Colors.white)),
-                              ),
-                            ],
-                          ),
-                          ...schools.map(
-                            (school) => TableRow(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text(school['name'] ?? ''),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child:
-                                      Text('${school['student_count'] ?? 0}'),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text('${school['driver_count'] ?? 0}'),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text(school['address'] ?? ''),
-                                ),
-                              ],
-                            ),
-                          )
-                        ],
-                      )
+                      if (loadingSchools)
+                        const Center(child: CircularProgressIndicator())
+                      else if (schools.isEmpty)
+                        const Text('No schools found.')
+                      else
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: schools.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final school = schools[index];
+                            return ListTile(
+                              title: Text(school['name'] ?? 'Unnamed'),
+                            );
+                          },
+                        ),
                     ],
                   ),
                 ),
