@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_client.dart';
 import 'screens/parent/parent_home_screen.dart';
 import 'screens/parent/parent_login_screen.dart';
@@ -40,23 +39,7 @@ class AuthHandler extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<AuthState>(
-      stream: Supabase.instance.client.auth.onAuthStateChange,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-
-        final session = snapshot.data?.session;
-        if (session != null) {
-          // If there's a session, the user is logged in and can see the home screen.
-          // The login screen handles the initial password set.
-          return const ParentHomeScreen();
-        }
-
-        // Otherwise, the user needs to log in.
-        return const ParentLoginScreen();
-      },
-    );
+    // Always start at login screen for parent panel
+    return const ParentLoginScreen();
   }
 }

@@ -53,7 +53,12 @@ CREATE TABLE public.students (
     school_id UUID NOT NULL REFERENCES public.schools(id) ON DELETE CASCADE,
     bus_id UUID REFERENCES public.buses(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
-    bus_stop TEXT,
+    bus_stop TEXT, -- Legacy field, kept for backward compatibility
+    bus_stop_area TEXT, -- e.g., "Kalimati", "Balaju"
+    bus_stop_city TEXT, -- e.g., "Kathmandu"
+    bus_stop_country TEXT, -- e.g., "Nepal"
+    bus_stop_lat DOUBLE PRECISION,
+    bus_stop_lng DOUBLE PRECISION,
     fingerprint_data BYTEA,
     parent1_email TEXT,
     parent2_email TEXT,
@@ -301,6 +306,32 @@ CREATE POLICY "Parents can delete their notifications"
 
 -- Realtime publication
 ALTER PUBLICATION supabase_realtime ADD TABLE public.parent_notifications;
+
+-- Parent OTPs table for single-use one-time passwords
+CREATE TABLE IF NOT EXISTS public.parent_otps (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  otp_code TEXT NOT NULL,
+  is_used BOOLEAN NOT NULL DEFAULT false,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT timezone('utc'::text, now())
+);
+COMMENT ON TABLE public.parent_otps IS 'Stores one-time passwords for parent first-time login.';
+
+-- Enable RLS
+ALTER TABLE public.parent_otps ENABLE ROW LEVEL SECURITY;
+
+-- RLS: parents can read their own OTP records
+DROP POLICY IF EXISTS "Parents can read their own OTPs" ON public.parent_otps;
+CREATE POLICY "Parents can read their own OTPs"
+  ON public.parent_otps FOR SELECT
+  USING (user_id = auth.uid());
+
+-- RLS: parents can update their own OTP records (to mark as used)
+DROP POLICY IF EXISTS "Parents can update their own OTPs" ON public.parent_otps;
+CREATE POLICY "Parents can update their own OTPs"
+  ON public.parent_otps FOR UPDATE
+  USING (user_id = auth.uid());
 
 -- Trigger: persist notifications for boarding/unboarding
 CREATE OR REPLACE FUNCTION public.fn_notify_parent_on_boarding()

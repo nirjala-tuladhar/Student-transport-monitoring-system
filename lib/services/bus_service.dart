@@ -135,7 +135,7 @@ class BusService {
     required String busId,
     required double latitude,
     required double longitude,
-    Duration minInterval = const Duration(seconds: 10),
+    Duration minInterval = const Duration(seconds: 3),
   }) async {
     final now = DateTime.now();
     final last = _lastSendAt[busId];
@@ -156,7 +156,7 @@ class BusService {
     double startLat = 27.7172,
     double startLng = 85.3240,
     double stepPerTick = 0.00005, // ~5.5m per tick
-    Duration interval = const Duration(seconds: 10),
+    Duration interval = const Duration(seconds: 3),
     bool debugPrints = false,
   }) {
     // Stop any existing simulator for this bus first

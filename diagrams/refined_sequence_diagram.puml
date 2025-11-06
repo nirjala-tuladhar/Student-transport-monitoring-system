@@ -1,0 +1,54 @@
+@startuml Refined_Sequence_Diagram
+skinparam linetype ortho
+skinparam backgroundColor #FEFEFE
+skinparam sequenceParticipantBackgroundColor #E6FFE6
+skinparam sequenceParticipantBorderColor #228B22
+skinparam shadowing false
+
+title Parent Tracking Bus - Refined Sequence Diagram
+
+actor Parent
+participant "Parent App" as App
+participant "Database" as DB
+participant "Realtime" as RT
+
+Parent -> App : Open app
+activate App
+
+App -> DB : Get student data
+activate DB
+DB --> App : Student info
+deactivate DB
+
+App -> RT : Subscribe to bus location
+activate RT
+RT --> App : Subscription confirmed
+deactivate RT
+
+App --> Parent : Show map
+
+== Real-time Updates ==
+
+RT -> App : Bus location update
+activate App
+App -> App : Update map marker
+App --> Parent : Show new position
+deactivate App
+
+== Edit Location ==
+
+Parent -> App : Click edit location
+App -> App : Open edit screen
+
+Parent -> App : Enter new coordinates
+App -> DB : Update bus stop location
+activate DB
+DB --> App : Success
+deactivate DB
+
+App -> App : Reload data
+App --> Parent : Show updated marker
+
+deactivate App
+
+@enduml

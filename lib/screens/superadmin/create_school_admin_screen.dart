@@ -2,7 +2,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:student_transport_monitoring_system/services/auth_service.dart';
 import 'package:student_transport_monitoring_system/services/school_service.dart';
-import '../../supabase_client.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/animated_widgets.dart';
+import '../../widgets/common_widgets.dart';
 
 class CreateSchoolAdminScreen extends StatefulWidget {
   const CreateSchoolAdminScreen({super.key});
@@ -72,7 +74,20 @@ class _CreateSchoolAdminScreenState extends State<CreateSchoolAdminScreen> {
       });
 
     } catch (e) {
-      setState(() => _errorMessage = 'An error occurred: $e');
+      String errorMsg = 'Failed to create school admin. Please try again.';
+      final errorStr = e.toString().toLowerCase();
+      
+      if (errorStr.contains('already exists') || errorStr.contains('duplicate')) {
+        errorMsg = 'This email is already registered. Please use a different email.';
+      } else if (errorStr.contains('invalid email')) {
+        errorMsg = 'Invalid email format. Please check and try again.';
+      } else if (errorStr.contains('network')) {
+        errorMsg = 'Network error. Please check your connection and try again.';
+      } else if (errorStr.contains('permission') || errorStr.contains('unauthorized')) {
+        errorMsg = 'You do not have permission to perform this action.';
+      }
+      
+      setState(() => _errorMessage = errorMsg);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -88,91 +103,154 @@ class _CreateSchoolAdminScreenState extends State<CreateSchoolAdminScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create School Admin')),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Container(
-            width: 400,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.95),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 15,
-                  offset: Offset(0, 5),
-                ),
-              ],
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(gradient: AppTheme.primaryGradient),
+        ),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.school_rounded, size: 26, color: Colors.white),
+            SizedBox(width: 12),
+            Text(
+              'New School Setup',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 20, color: Colors.white),
             ),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: _schoolNameController,
-                    decoration: const InputDecoration(
-                      labelText: 'School Name',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.school),
-                    ),
-                    validator: (val) =>
-                        val == null || val.isEmpty ? 'Enter school name' : null,
-                  ),
-                  const SizedBox(height: 20),
-                  TextFormField(
-                    controller: _emailController,
-                    decoration: const InputDecoration(
-                      labelText: 'School Admin Email',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.email),
-                    ),
-                    validator: (val) {
-                      if (val == null || val.isEmpty) return 'Enter email';
-                      final emailRegex =
-                          RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$');
-                      if (!emailRegex.hasMatch(val)) return 'Enter valid email';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 30),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _loading ? null : _createSchoolAdmin,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        backgroundColor: Colors.blueAccent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+          ],
+        ),
+        centerTitle: true,
+        leading: IconButton(
+          icon: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Colors.white),
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppTheme.subtleGradient),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 500),
+              child: FadeInAnimation(
+                child: AnimatedCard(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryBlue.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppTheme.primaryBlue.withOpacity(0.2)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  gradient: AppTheme.primaryGradient,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(Icons.school_rounded, color: Colors.white, size: 28),
+                              ),
+                              const SizedBox(width: 16),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Create Admin Account', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
+                                    SizedBox(height: 4),
+                                    Text('Setup new school and admin profile', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      child: _loading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text(
-                              'Send Invitation',
-                              style:
-                                  TextStyle(fontSize: 16, color: Colors.white),
+                        const SizedBox(height: 28),
+                        ModernTextField(
+                          controller: _schoolNameController,
+                          label: 'School Name',
+                          hint: 'e.g., Springfield High School',
+                          prefixIcon: Icons.school_rounded,
+                          validator: (val) => val == null || val.isEmpty ? 'Enter school name' : null,
+                        ),
+                        const SizedBox(height: 20),
+                        ModernTextField(
+                          controller: _emailController,
+                          label: 'School Admin Email',
+                          hint: 'admin@school.com',
+                          prefixIcon: Icons.email_rounded,
+                          keyboardType: TextInputType.emailAddress,
+                          validator: (val) {
+                            if (val == null || val.isEmpty) return 'Enter email';
+                            final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$');
+                            if (!emailRegex.hasMatch(val)) return 'Enter valid email';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 32),
+                        AnimatedButton(
+                          text: 'Send Invitation',
+                          icon: Icons.send_rounded,
+                          onPressed: _loading ? null : _createSchoolAdmin,
+                          isLoading: _loading,
+                          backgroundColor: AppTheme.success,
+                          width: double.infinity,
+                        ),
+                        const SizedBox(height: 24),
+                        if (_errorMessage != null)
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppTheme.error.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppTheme.error.withOpacity(0.3)),
                             ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.error_outline_rounded, color: AppTheme.error, size: 22),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(_errorMessage!, style: TextStyle(color: AppTheme.error, fontSize: 14, fontWeight: FontWeight.w500)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (_successMessage != null)
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppTheme.success.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppTheme.success.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.check_circle_outline_rounded, color: AppTheme.success, size: 22),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(_successMessage!, style: TextStyle(color: AppTheme.success, fontSize: 14, fontWeight: FontWeight.w600)),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  if (_errorMessage != null)
-                    SelectableText(
-                      _errorMessage!,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  if (_successMessage != null)
-                    SelectableText(
-                      _successMessage!,
-                      style: const TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                ],
+                ),
               ),
             ),
           ),

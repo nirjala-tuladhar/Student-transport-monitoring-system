@@ -11,7 +11,15 @@ import '../../services/geocoding_service.dart';
 class MapTab extends StatefulWidget {
   final String? busId;
   final String busPlate;
-  const MapTab({super.key, required this.busId, required this.busPlate});
+  final double? initialHomeLat;
+  final double? initialHomeLng;
+  const MapTab({
+    super.key,
+    required this.busId,
+    required this.busPlate,
+    this.initialHomeLat,
+    this.initialHomeLng,
+  });
 
   @override
   State<MapTab> createState() => _MapTabState();
@@ -25,18 +33,33 @@ class _MapTabState extends State<MapTab> {
   LatLng? _school;
   LatLng? _home;
   String? _studentId;
-  bool? _boarded; // unknown initially
   DateTime? _lastEtaNotify;
   bool _dropNotified = false;
+  DateTime? _lastBoardingNotify;
+  String? _lastBoardingStatus; // Track last boarding status to prevent duplicates
   final _mapController = MapController();
   final _log = NotificationLogService();
   final _remoteNotif = ParentNotificationService();
-  DateTime? _lastProcessAt;
-  LatLng? _lastProcessedPos;
 
   @override
   void initState() {
     super.initState();
+    // If initial home coordinates are provided, set them immediately
+    if (widget.initialHomeLat != null && widget.initialHomeLng != null) {
+      _home = LatLng(widget.initialHomeLat!, widget.initialHomeLng!);
+      debugPrint('[Parent Map] ✅ Home set from initial props in initState: ${widget.initialHomeLat}, ${widget.initialHomeLng}');
+      // Center map on home location after a short delay
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted && _home != null) {
+          try {
+            _mapController.move(_home!, 15);
+            debugPrint('[Parent Map] 📍 Map centered on home location');
+          } catch (e) {
+            debugPrint('[Parent Map] ⚠️ Could not center map: $e');
+          }
+        }
+      });
+    }
     _loadContext();
     _initBus();
   }
@@ -54,6 +77,12 @@ class _MapTabState extends State<MapTab> {
         final pos = LatLng(lat, lng);
         setState(() => _current = pos);
         debugPrint('[Parent Map] initial bus pos: $lat, $lng');
+        // Move map to bus location
+        try {
+          _mapController.move(pos, 15);
+        } catch (_) {
+          // MapController might not be ready yet, that's ok
+        }
       } else {
         debugPrint('[Parent Map] no previous bus location found');
       }
@@ -76,36 +105,71 @@ class _MapTabState extends State<MapTab> {
       // home coords
       final hlat = (row['bus_stop_lat'] as num?)?.toDouble();
       final hlon = (row['bus_stop_lng'] as num?)?.toDouble();
-      String? stopText = row['bus_stop'] as String?;
-      // Debug: print fetched coordinates
-      // These prints help verify if RLS/columns are providing data
-      // They will appear in the terminal/Run console
-      // Remove once verified
-      // ignore: avoid_print
-      debugPrint('[Parent Map] school lat/lng: $slat, $slon');
-      debugPrint('[Parent Map] home   lat/lng: $hlat, $hlon');
+      
+      // Build address from structured fields (preferred) or fallback to legacy field
+      final area = row['bus_stop_area'] as String?;
+      final city = row['bus_stop_city'] as String?;
+      final country = row['bus_stop_country'] as String?;
+      String? stopText;
+      if (area != null || city != null || country != null) {
+        stopText = [area, city, country]
+            .where((e) => e != null && e.trim().isNotEmpty)
+            .join(', ');
+      } else {
+        stopText = row['bus_stop'] as String?;
+      }
+      
+      debugPrint('[Parent Map] ===== INITIALIZATION =====');
+      debugPrint('[Parent Map] School lat/lng: $slat, $slon');
+      debugPrint('[Parent Map] Home lat/lng: $hlat, $hlon');
+      debugPrint('[Parent Map] Bus stop address: $stopText');
+      debugPrint('[Parent Map] Student ID: ${row['id']}');
+      debugPrint('[Parent Map] Bus ID: ${row['bus_id']}');
+      
       setState(() {
-        if (slat != null && slon != null) _school = LatLng(slat, slon);
-        if (hlat != null && hlon != null) _home = LatLng(hlat, hlon);
+        if (slat != null && slon != null) {
+          _school = LatLng(slat, slon);
+          debugPrint('[Parent Map] ✅ School marker set');
+        } else {
+          debugPrint('[Parent Map] ⚠️ No school coordinates');
+        }
+        
+        // Prioritize passed-in coordinates (from edit screen) over fetched ones
+        if (widget.initialHomeLat != null && widget.initialHomeLng != null) {
+          _home = LatLng(widget.initialHomeLat!, widget.initialHomeLng!);
+          debugPrint('[Parent Map] ✅ Home marker set from props: ${widget.initialHomeLat}, ${widget.initialHomeLng}');
+        } else if (hlat != null && hlon != null) {
+          _home = LatLng(hlat, hlon);
+          debugPrint('[Parent Map] ✅ Home marker set from DB: $hlat, $hlon');
+        } else {
+          debugPrint('[Parent Map] ⚠️ No home coordinates - will try geocoding');
+        }
+        
         _studentId = row['id'] as String?;
       });
 
-      // Fallback: if no home coords but we have a bus_stop text, try geocoding it once
+      // Fallback: if no home coords but we have a bus_stop address, try geocoding it once
       if (mounted && _home == null && (stopText != null && stopText.trim().isNotEmpty)) {
+        debugPrint('[Parent Map] Attempting to geocode bus stop: "$stopText"');
         try {
           final geo = await GeocodingService().geocodeAddress(stopText);
           if (geo != null && mounted) {
             setState(() => _home = LatLng(geo.lat, geo.lon));
-            debugPrint('[Parent Map] home geocoded from bus_stop text: ${geo.lat}, ${geo.lon}');
+            debugPrint('[Parent Map] ✅ Home geocoded successfully: ${geo.lat}, ${geo.lon}');
             // Persist back to DB so it doesn't disappear on next load
             final sid = _studentId;
             if (sid != null) {
+              debugPrint('[Parent Map] Persisting coordinates to database...');
               unawaited(_service.persistHomeCoords(studentId: sid, lat: geo.lat, lng: geo.lon));
             }
+          } else {
+            debugPrint('[Parent Map] ❌ Geocoding returned null for "$stopText"');
           }
         } catch (e) {
-          debugPrint('[Parent Map] geocode bus_stop failed: $e');
+          debugPrint('[Parent Map] ❌ Geocoding failed: $e');
         }
+      } else if (_home == null) {
+        debugPrint('[Parent Map] ⚠️ No bus stop address available for geocoding');
       }
 
       // Subscribe to boarding status changes
@@ -118,19 +182,33 @@ class _MapTabState extends State<MapTab> {
             String? message;
             if (status.contains('board')) {
               if (status.contains('un')) {
-                _boarded = false; message = 'Your child has unboarded the bus';
+                message = 'Your child has unboarded the bus';
               } else {
-                _boarded = true; message = 'Your child has boarded the bus';
+                message = 'Your child has boarded the bus';
               }
             } else if (r.containsKey('boarded') || r.containsKey('is_boarded')) {
               final b = (r['boarded'] ?? r['is_boarded']) as bool?;
               if (b != null) {
-                _boarded = b;
                 message = b ? 'Your child has boarded the bus' : 'Your child has unboarded the bus';
               }
             }
-            if (message != null) {
-              // Silent log only; no in-map SnackBar
+            if (message != null && mounted) {
+              // Check if this is the same status as last time (prevent duplicates)
+              if (_lastBoardingStatus == message) {
+                debugPrint('[Parent Map] Boarding notification skipped (same status: $message)');
+                return;
+              }
+              
+              // Throttle boarding notifications to prevent duplicates (60 seconds)
+              final now = DateTime.now();
+              if (_lastBoardingNotify != null && now.difference(_lastBoardingNotify!).inSeconds < 60) {
+                final secondsSince = now.difference(_lastBoardingNotify!).inSeconds;
+                debugPrint('[Parent Map] Boarding notification throttled (${secondsSince}s since last, need 60s)');
+                return;
+              }
+              _lastBoardingNotify = now;
+              _lastBoardingStatus = message;
+              
               await _log.addLog(NotificationLogItem(
                 message: message,
                 type: 'boarding',
@@ -138,6 +216,8 @@ class _MapTabState extends State<MapTab> {
               ));
               // Persist to backend so it's visible later
               unawaited(_remoteNotif.createMyNotification(type: 'boarding', message: message));
+              
+              debugPrint('[Parent Map] 🔔 BOARDING NOTIFICATION: $message');
             }
           },
         );
@@ -148,6 +228,7 @@ class _MapTabState extends State<MapTab> {
   }
 
   void _subscribe(String busId) {
+    debugPrint('[Parent Map] 🔔 Subscribing to bus location updates for busId: $busId');
     _locChannel = _service.subscribeBusLocation(
       busId: busId,
       onInsert: (row) {
@@ -155,22 +236,19 @@ class _MapTabState extends State<MapTab> {
         final lng = (row['longitude'] as num).toDouble();
         final pos = LatLng(lat, lng);
         if (!mounted) return;
-        // Throttle updates: process if >=10s since last or moved >30m
-        final now = DateTime.now();
-        final timeOk = _lastProcessAt == null || now.difference(_lastProcessAt!).inSeconds >= 10;
-        final distOk = _lastProcessedPos == null ||
-            const Distance().as(LengthUnit.Meter, pos, _lastProcessedPos!) > 30.0;
-        if (!(timeOk || distOk)) return;
-        _lastProcessAt = now;
-        _lastProcessedPos = pos;
-
+        
+        debugPrint('[Parent Map] 📍 Bus location update: $lat, $lng');
+        
+        // Always update current position for map display
         setState(() => _current = pos);
+        
         // Smooth move to latest position (guarded)
         try {
           _mapController.move(pos, _mapController.camera.zoom);
         } catch (_) {}
 
-        // Notifications based on proximity
+        // Check proximity notifications on EVERY update (don't throttle notifications)
+        debugPrint('[Parent Map] Checking proximity notifications...');
         _maybeNotifyArrival(pos);
         _maybeNotifyDropAtSchool(pos);
         _maybeNotifyHomeReached(pos);
@@ -179,42 +257,83 @@ class _MapTabState extends State<MapTab> {
   }
 
   void _maybeNotifyArrival(LatLng pos) async {
-    if (_home == null) return;
-    // Rough ETA: 5 minutes ≈ 1.5 km (assuming urban speed ~18 km/h)
+    if (_home == null) {
+      debugPrint('[Parent Map] _maybeNotifyArrival: No home coordinates set');
+      return;
+    }
+    // Proximity alert: within 200 meters of the bus stop
     final dist = const Distance().as(LengthUnit.Meter, pos, _home!);
-    final within = dist <= 1500;
+    debugPrint('[Parent Map] Distance to home: ${dist.toStringAsFixed(1)}m (threshold: 200m)');
+    
+    final within = dist <= 200;
     final now = DateTime.now();
     if (within) {
-      final tooSoon = _lastEtaNotify != null && now.difference(_lastEtaNotify!).inMinutes < 20;
+      final secondsSinceLastNotify = _lastEtaNotify != null ? now.difference(_lastEtaNotify!).inSeconds : 999;
+      final tooSoon = _lastEtaNotify != null && secondsSinceLastNotify < 60;
+      debugPrint('[Parent Map] Within 200m! secondsSinceLastNotify=$secondsSinceLastNotify, tooSoon=$tooSoon (need 60s), lastNotify=$_lastEtaNotify');
       if (!tooSoon) {
         _lastEtaNotify = now;
+        final message = 'Bus is near your stop (within ${dist.toStringAsFixed(0)} m).';
+        debugPrint('[Parent Map] 🔔 SENDING ARRIVAL NOTIFICATION: $message');
+        
+        // Show visual feedback
+        if (mounted) {
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🔔 $message'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+        
         // Silent log only
         await _log.addLog(NotificationLogItem(
-          message: 'Bus arriving soon: about 5 minutes from your stop.',
+          message: message,
           type: 'arrival',
           timestamp: DateTime.now(),
         ));
-        unawaited(_remoteNotif.createMyNotification(type: 'arrival', message: 'Bus arriving soon: about 5 minutes from your stop.'));
+        unawaited(_remoteNotif.createMyNotification(type: 'arrival', message: message));
       }
     }
   }
 
   void _maybeNotifyDropAtSchool(LatLng pos) async {
     if (_school == null) return;
-    // Near school within 200m and we previously saw boarded true
+    // Near school within 50m
     final dist = const Distance().as(LengthUnit.Meter, pos, _school!);
-    if (dist <= 200 && _boarded == true && !_dropNotified) {
+    debugPrint('[Parent Map] Distance to school: ${dist.toStringAsFixed(1)}m (threshold: 50m), dropNotified=$_dropNotified');
+    
+    if (dist <= 50 && !_dropNotified) {
       _dropNotified = true;
-      // Silent log only
+      final message = 'Bus is at school (within ${dist.toStringAsFixed(0)} m).';
+      debugPrint('[Parent Map] 🔔 SENDING SCHOOL REACHED NOTIFICATION: $message');
+      
+      // Show visual feedback
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🔔 $message'),
+            backgroundColor: Colors.blue,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+      
+      // Save to local log
       await _log.addLog(NotificationLogItem(
-        message: 'Dropped at school: bus has arrived.',
+        message: message,
         type: 'drop',
         timestamp: DateTime.now(),
       ));
-      unawaited(_remoteNotif.createMyNotification(type: 'drop', message: 'Dropped at school: bus has arrived.'));
+      
+      // Save to database
+      unawaited(_remoteNotif.createMyNotification(type: 'drop', message: message));
     }
-    // Reset drop notification when bus moves away
-    if (dist > 400) {
+    // Reset drop notification when bus moves away (100m)
+    if (dist > 100) {
       _dropNotified = false;
     }
   }
@@ -223,16 +342,33 @@ class _MapTabState extends State<MapTab> {
   void _maybeNotifyHomeReached(LatLng pos) async {
     if (_home == null) return;
     final dist = const Distance().as(LengthUnit.Meter, pos, _home!);
-    if (dist <= 100 && !_homeReachedNotified) {
+    debugPrint('[Parent Map] Distance to home (reached check): ${dist.toStringAsFixed(1)}m (threshold: 50m)');
+    if (dist <= 50 && !_homeReachedNotified) {
       _homeReachedNotified = true;
+      final message = 'Bus has reached your stop.';
+      debugPrint('[Parent Map] 🔔 SENDING HOME REACHED NOTIFICATION: $message');
+      
+      // Show visual feedback
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🔔 $message'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+      
       await _log.addLog(NotificationLogItem(
-        message: 'Bus has reached your stop.',
+        message: message,
         type: 'home_reached',
         timestamp: DateTime.now(),
       ));
-      unawaited(_remoteNotif.createMyNotification(type: 'home_reached', message: 'Bus has reached your stop.'));
+      unawaited(_remoteNotif.createMyNotification(type: 'home_reached', message: message));
     }
-    if (dist > 200) {
+    // Reset when bus moves away (100m)
+    if (dist > 100) {
       _homeReachedNotified = false;
     }
   }
@@ -249,95 +385,198 @@ class _MapTabState extends State<MapTab> {
     if (widget.busId == null) {
       return const Center(child: Text('No bus assigned yet'));
     }
-    final center = _current ?? _home ?? _school ?? const LatLng(27.7172, 85.3240); // Prefer home when available
-    return FlutterMap(
-      mapController: _mapController,
-      options: MapOptions(
-        initialCenter: center,
-        initialZoom: 14,
-        minZoom: 11,
-        maxZoom: 19,
-        cameraConstraint: CameraConstraint.contain(
-          bounds: LatLngBounds(
-            const LatLng(27.55, 85.15), // SW corner of Kathmandu Valley approx
-            const LatLng(27.85, 85.55), // NE corner of Kathmandu Valley approx
+    final center = _current ?? _home ?? _school ?? const LatLng(27.7172, 85.3240); // Prefer bus location
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: FlutterMap(
+        mapController: _mapController,
+        options: MapOptions(
+          initialCenter: center,
+          initialZoom: 14,
+          minZoom: 11,
+          maxZoom: 19,
+          cameraConstraint: CameraConstraint.contain(
+            bounds: LatLngBounds(
+              const LatLng(27.55, 85.15), // SW corner of Kathmandu Valley approx
+              const LatLng(27.85, 85.55), // NE corner of Kathmandu Valley approx
+            ),
           ),
         ),
-      ),
-      children: [
-        TileLayer(
-          urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          subdomains: const ['a', 'b', 'c'],
-          userAgentPackageName: 'com.example.parent',
-        ),
-        MarkerLayer(markers: [
-          if (_school != null)
-            Marker(
-              point: _school!,
-              alignment: Alignment.bottomCenter,
-              width: 36,
-              height: 36,
-              child: const Icon(Icons.school, size: 32, color: Colors.blue),
-            ),
-          if (_home != null)
-            Marker(
-              point: _home!,
-              alignment: Alignment.bottomCenter,
-              width: 36,
-              height: 36,
-              child: const Icon(Icons.home, size: 32, color: Colors.green),
-            ),
-          if (_current != null)
-            Marker(
-              point: _current!,
-              alignment: Alignment.bottomCenter,
-              width: 40,
-              height: 40,
-              child: const Icon(Icons.directions_bus, size: 36, color: Colors.red),
-            ),
-        ]),
-        if (_school == null && _home == null)
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
-              child: Card(
-                color: Colors.black.withOpacity(0.7),
-                child: const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Text(
-                    'No school/home markers yet. Check that school coords and student\'s bus stop lat/lng are set and visible by parent (RLS).',
-                    style: TextStyle(color: Colors.white),
-                    textAlign: TextAlign.center,
-                  ),
+        children: [
+          TileLayer(
+            urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            subdomains: const ['a', 'b', 'c'],
+            userAgentPackageName: 'com.example.parent',
+          ),
+          MarkerLayer(markers: [
+            if (_school != null)
+              Marker(
+                point: _school!,
+                alignment: Alignment.bottomCenter,
+                width: 100,
+                height: 70,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2196F3),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Text(
+                        'School',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.account_balance_rounded,
+                        color: Color(0xFF2196F3),
+                        size: 24,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ),
-        if (_school != null && _current != null)
-          PolylineLayer(
-            polylines: [
-              Polyline(
-                points: [_school!, _current!],
-                strokeWidth: 4,
-                color: Colors.orange,
-              )
-            ],
-          ),
-        Align(
-          alignment: Alignment.topRight,
-          child: Padding(
-            padding: const EdgeInsets.only(top: 12, right: 12),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Text('Bus: ${widget.busPlate}'),
+            if (_home != null)
+              Marker(
+                point: _home!,
+                alignment: Alignment.bottomCenter,
+                width: 100,
+                height: 70,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4CAF50),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Text(
+                        'Home',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.home_rounded,
+                        color: Color(0xFF4CAF50),
+                        size: 24,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ),
-        ),
-        // History button removed as per request
-      ],
+            if (_current != null)
+              Marker(
+                point: _current!,
+                alignment: Alignment.bottomCenter,
+                width: 160,
+                height: 75,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF5722), Color(0xFFFF7043)],
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        widget.busPlate,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.directions_bus_rounded,
+                        color: Color(0xFFFF5722),
+                        size: 24,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ]),
+          // Debug UI and warning messages removed for cleaner map view
+        ],
+      ),
     );
   }
 }

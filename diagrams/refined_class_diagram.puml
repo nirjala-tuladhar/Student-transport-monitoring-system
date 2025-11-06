@@ -1,0 +1,90 @@
+@startuml Refined_Class_Diagram
+skinparam linetype ortho
+skinparam backgroundColor #FEFEFE
+skinparam classBackgroundColor #F0F8FF
+skinparam classBorderColor #4682B4
+skinparam shadowing false
+
+title Student Transport System - Refined Class Diagram
+
+class schools {
+  + id: UUID
+  + name: String
+  + address: String
+  + latitude: Double
+  + longitude: Double
+}
+
+class users {
+  + id: UUID
+  + email: String
+  + role: String
+}
+
+class school_admins {
+  + id: UUID
+  + user_id: UUID
+  + school_id: UUID
+  + name: String
+}
+
+class buses {
+  + id: UUID
+  + school_id: UUID
+  + plate_number: String
+  + driver_name: String
+  + capacity: Integer
+}
+
+class students {
+  + id: UUID
+  + school_id: UUID
+  + name: String
+  + bus_id: UUID
+  + bus_stop_lat: Double
+  + bus_stop_lng: Double
+}
+
+class parents {
+  + id: UUID
+  + user_id: UUID
+  + student_id: UUID
+  + name: String
+  + phone: String
+}
+
+class bus_locations {
+  + id: UUID
+  + bus_id: UUID
+  + latitude: Double
+  + longitude: Double
+  + timestamp: DateTime
+}
+
+class student_boarding_status {
+  + id: UUID
+  + student_id: UUID
+  + status: String
+  + timestamp: DateTime
+}
+
+class notifications {
+  + id: UUID
+  + student_id: UUID
+  + title: String
+  + message: String
+}
+
+' Relationships
+users --> school_admins : has
+users --> parents : has
+schools --> school_admins : employs
+schools --> buses : owns
+schools --> students : enrolls
+buses --> students : transports
+buses --> bus_locations : tracks
+students --> parents : has
+students --> student_boarding_status : records
+students --> notifications : receives
+
+@enduml

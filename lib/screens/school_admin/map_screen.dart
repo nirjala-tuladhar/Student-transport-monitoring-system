@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../services/school_service.dart';
 import '../../services/geocoding_service.dart';
+import '../../theme/app_theme.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -33,6 +34,13 @@ class _MapScreenState extends State<MapScreen> {
     try {
       final data = await _schoolService.getLatestBusLocations();
       final school = await _schoolService.getSchool();
+      
+      print('[SchoolAdminMap] ===== LOADING MAP DATA =====');
+      print('[SchoolAdminMap] School: ${school?.name}');
+      print('[SchoolAdminMap] School lat/lon: ${school?.latitude}, ${school?.longitude}');
+      print('[SchoolAdminMap] School address: ${school?.address}');
+      print('[SchoolAdminMap] Buses found: ${data.length}');
+      
       setState(() {
         _locations = data;
         _loading = false;
@@ -40,25 +48,35 @@ class _MapScreenState extends State<MapScreen> {
 
       // Determine center/marker for school
       if (school?.latitude != null && school?.longitude != null) {
+        print('[SchoolAdminMap] ✅ Using stored school coordinates');
         setState(() {
           _school = LatLng(school!.latitude!, school.longitude!);
           _center = _school!;
         });
       } else if (school != null && school.name.isNotEmpty) {
         // Fallback: best-effort geocode by school name
+        print('[SchoolAdminMap] ⚠️ No coordinates, attempting geocoding...');
         try {
           final query = [school.name, school.address ?? '']
               .where((e) => e.trim().isNotEmpty)
               .join(', ');
+          print('[SchoolAdminMap] Geocoding query: "$query"');
           final geo = await GeocodingService().geocodeAddress(query);
           if (!mounted) return;
           if (geo != null) {
+            print('[SchoolAdminMap] ✅ Geocoded successfully: ${geo.lat}, ${geo.lon}');
             setState(() {
               _school = LatLng(geo.lat, geo.lon);
               _center = _school!;
             });
+          } else {
+            print('[SchoolAdminMap] ❌ Geocoding returned null');
           }
-        } catch (_) {}
+        } catch (e) {
+          print('[SchoolAdminMap] ❌ Geocoding error: $e');
+        }
+      } else {
+        print('[SchoolAdminMap] ⚠️ No school data available');
       }
 
       if (_school == null && data.isNotEmpty) {
@@ -81,15 +99,64 @@ class _MapScreenState extends State<MapScreen> {
   List<Marker> _buildMarkers() {
     final markers = <Marker>[];
     if (_school != null) {
+      print('[SchoolAdminMap] Adding school marker at: ${_school!.latitude}, ${_school!.longitude}');
       markers.add(
         Marker(
           point: _school!,
           alignment: Alignment.bottomCenter,
-          width: 36,
-          height: 36,
-          child: const Icon(Icons.school, color: Colors.blue, size: 32),
+          width: 100,
+          height: 70,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2196F3),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Text(
+                  'School',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.account_balance_rounded,
+                  color: Color(0xFF2196F3),
+                  size: 24,
+                ),
+              ),
+            ],
+          ),
         ),
       );
+    } else {
+      print('[SchoolAdminMap] ⚠️ No school marker - _school is null');
     }
 
     markers.addAll(_locations.map<Marker>((row) {
@@ -100,18 +167,54 @@ class _MapScreenState extends State<MapScreen> {
         point: LatLng(lat, lon),
         alignment: Alignment.bottomCenter,
         width: 160,
-        height: 64,
+        height: 75,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: Colors.indigo,
-                borderRadius: BorderRadius.circular(6),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF5722), Color(0xFFFF7043)],
+                ),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              child: Text(plate, style: const TextStyle(color: Colors.white, fontSize: 12)),
+              child: Text(
+                plate,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
-            const Icon(Icons.directions_bus, color: Colors.red, size: 26),
+            const SizedBox(height: 2),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.directions_bus_rounded,
+                color: Color(0xFFFF5722),
+                size: 24,
+              ),
+            ),
           ],
         ),
       );
@@ -122,60 +225,118 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return Container(
+        decoration: const BoxDecoration(gradient: AppTheme.subtleGradient),
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Loading map...', style: TextStyle(color: AppTheme.textSecondary)),
+            ],
+          ),
+        ),
+      );
     }
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Text('Failed to load bus locations:\n$_error', textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
+      return Container(
+        decoration: const BoxDecoration(gradient: AppTheme.subtleGradient),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline_rounded, size: 64, color: AppTheme.error.withOpacity(0.7)),
+                const SizedBox(height: 16),
+                Text('Failed to load bus locations', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
+                const SizedBox(height: 8),
+                Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: AppTheme.error, fontSize: 14)),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: _loadLocations,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Retry'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       );
     }
 
-    return Column(
+    return Stack(
       children: [
-        Expanded(
-          child: FlutterMap(
-            options: MapOptions(
-              initialCenter: _center,
-              initialZoom: 13,
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                subdomains: const ['a', 'b', 'c'],
-                userAgentPackageName: 'student_transport_monitoring_system',
-              ),
-              MarkerLayer(markers: _buildMarkers()),
-              if (_school != null && _locations.isNotEmpty)
-                PolylineLayer(
-                  polylines: _locations.map((row) {
-                    final lat = (row['latitude'] as num).toDouble();
-                    final lon = (row['longitude'] as num).toDouble();
-                    return Polyline(
-                      points: [_school!, LatLng(lat, lon)],
-                      strokeWidth: 3,
-                      color: Colors.orange,
-                    );
-                  }).toList(),
-                ),
-            ],
+        FlutterMap(
+          options: MapOptions(
+            initialCenter: _center,
+            initialZoom: 13,
           ),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              subdomains: const ['a', 'b', 'c'],
+              userAgentPackageName: 'student_transport_monitoring_system',
+            ),
+            MarkerLayer(markers: _buildMarkers()),
+          ],
         ),
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Buses: ${_locations.length}'),
-              IconButton(
-                tooltip: 'Refresh',
-                icon: const Icon(Icons.refresh),
-                onPressed: _loadLocations,
-              ),
-            ],
+        Positioned(
+          bottom: 16,
+          left: 16,
+          right: 16,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: AppTheme.elevatedShadow,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        gradient: AppTheme.primaryGradient,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.directions_bus_rounded, color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Active Buses', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                        Text('${_locations.length}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
+                      ],
+                    ),
+                  ],
+                ),
+                IconButton(
+                  tooltip: 'Refresh',
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryBlue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.refresh_rounded, color: AppTheme.primaryBlue, size: 20),
+                  ),
+                  onPressed: _loadLocations,
+                ),
+              ],
+            ),
           ),
         ),
       ],

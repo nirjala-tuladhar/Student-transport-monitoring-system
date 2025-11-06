@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ParentNotificationItem {
@@ -47,7 +48,7 @@ class ParentNotificationService {
       table: 'parent_notifications',
       filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'parent_user_id', value: uid),
       callback: (payload) {
-        final row = payload.newRecord as Map<String, dynamic>;
+        final row = payload.newRecord;
         if (row['parent_user_id'] != uid) return; // extra guard
         onInsert(ParentNotificationItem(
           id: row['id'] as String,
@@ -66,11 +67,20 @@ class ParentNotificationService {
     required String message,
   }) async {
     final uid = _supabase.auth.currentUser?.id;
-    if (uid == null) return;
-    await _supabase.from('parent_notifications').insert({
-      'parent_user_id': uid,
-      'type': type,
-      'message': message,
-    });
+    if (uid == null) {
+      debugPrint('[ParentNotificationService] ❌ Cannot create notification: user not authenticated');
+      return;
+    }
+    try {
+      debugPrint('[ParentNotificationService] Creating notification: type=$type, message=$message');
+      await _supabase.from('parent_notifications').insert({
+        'parent_user_id': uid,
+        'type': type,
+        'message': message,
+      });
+      debugPrint('[ParentNotificationService] ✅ Notification created successfully');
+    } catch (e) {
+      debugPrint('[ParentNotificationService] ❌ Failed to create notification: $e');
+    }
   }
 }

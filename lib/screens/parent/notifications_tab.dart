@@ -90,15 +90,9 @@ class _NotificationsTabState extends State<NotificationsTab> {
 
     return RefreshIndicator(
       onRefresh: _loadLogs,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(12.0),
-            child: Text('Notifications', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-          Expanded(child: body),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: body,
       ),
     );
   }
@@ -142,20 +136,41 @@ class _DaySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: Text(_prettyDay(context, day), style: const TextStyle(fontWeight: FontWeight.bold)),
-        ),
-        ...items.map((e) => ListTile(
-              leading: Icon(_iconFor(e.type)),
-              title: Text(e.message),
-              trailing: Text(_formatTime(e.createdAt), style: const TextStyle(color: Colors.grey)),
-            )),
-        const Divider(height: 0),
-      ],
+    return Card(
+      elevation: 4,
+      color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              _prettyDay(context, day),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Colors.blue[700],
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+          ...items.map((e) => ListTile(
+                leading: Icon(_iconFor(e.type), color: Colors.blue[700]),
+                title: Text(
+                  e.message,
+                  style: const TextStyle(color: Colors.black),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 2,
+                ),
+                trailing: Text(
+                  _formatTime(e.createdAt),
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+              )),
+        ],
+      ),
     );
   }
 

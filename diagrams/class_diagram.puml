@@ -1,0 +1,109 @@
+@startuml Student_Transport_Class_Diagram
+!define ORTHOGONAL
+skinparam linetype ortho
+skinparam backgroundColor #FEFEFE
+skinparam classBackgroundColor #F0F8FF
+skinparam classBorderColor #4682B4
+
+title Student Transport Monitoring System - Class Diagram
+
+' Database Tables
+package "Database Layer" {
+  class schools {
+    + id: UUID
+    + name: String
+    + address: String
+    + latitude: Double
+    + longitude: Double
+    + logo_url: String
+    + created_at: DateTime
+  }
+
+  class users {
+    + id: UUID
+    + email: String
+    + role: String
+    + created_at: DateTime
+  }
+
+  class school_admins {
+    + id: UUID
+    + user_id: UUID
+    + school_id: UUID
+    + name: String
+    + created_at: DateTime
+  }
+
+  class buses {
+    + id: UUID
+    + school_id: UUID
+    + plate_number: String
+    + driver_name: String
+    + driver_phone: String
+    + capacity: Integer
+    + username: String
+    + created_at: DateTime
+  }
+
+  class students {
+    + id: UUID
+    + school_id: UUID
+    + name: String
+    + bus_id: UUID
+    + bus_stop: String
+    + bus_stop_lat: Double
+    + bus_stop_lng: Double
+    + bus_stop_area: String
+    + bus_stop_city: String
+    + bus_stop_country: String
+    + created_at: DateTime
+  }
+
+  class parents {
+    + id: UUID
+    + user_id: UUID
+    + student_id: UUID
+    + name: String
+    + phone: String
+    + created_at: DateTime
+  }
+
+  class bus_locations {
+    + id: UUID
+    + bus_id: UUID
+    + latitude: Double
+    + longitude: Double
+    + timestamp: DateTime
+  }
+
+  class student_boarding_status {
+    + id: UUID
+    + student_id: UUID
+    + bus_id: UUID
+    + status: String
+    + timestamp: DateTime
+  }
+
+  class notifications {
+    + id: UUID
+    + student_id: UUID
+    + title: String
+    + message: String
+    + type: String
+    + created_at: DateTime
+  }
+}
+
+' Relationships
+users --> school_admins : has
+users --> parents : has
+schools --> school_admins : employs
+schools --> buses : owns
+schools --> students : enrolls
+buses --> students : transports
+buses --> bus_locations : tracks
+students --> parents : has
+students --> student_boarding_status : records
+students --> notifications : receives
+
+@enduml

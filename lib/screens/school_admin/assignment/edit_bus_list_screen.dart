@@ -176,9 +176,10 @@ class _EditBusListScreenState extends State<EditBusListScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Assign Student'),
+        title: Text('Assign Student to ${bus.plateNumber}'),
         content: SizedBox(
-          width: double.maxFinite,
+          width: 300,
+          height: 400,
           child: _unassignedStudents.isEmpty
               ? const Text('No unassigned students available.')
               : ListView.builder(
@@ -186,26 +187,35 @@ class _EditBusListScreenState extends State<EditBusListScreen> {
                   itemCount: _unassignedStudents.length,
                   itemBuilder: (context, index) {
                     final student = _unassignedStudents[index];
-                    return ListTile(
-                      title: Text(student.name),
-                      onTap: () async {
-                        try {
-                          await _schoolService.assignStudentToBus(student.id, bus.id);
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Assigned ${student.name} to ${bus.plateNumber}')),
-                            );
+                    return Card(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      child: ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.person, size: 20),
+                        title: Text(
+                          student.name,
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        onTap: () async {
+                          try {
+                            await _schoolService.assignStudentToBus(student.id, bus.id);
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Assigned ${student.name} to ${bus.plateNumber}')),
+                              );
+                            }
+                            await _loadScreenData();
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Failed to assign: $e')),
+                              );
+                            }
                           }
-                          await _loadScreenData();
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Failed to assign: $e')),
-                            );
-                          }
-                        }
-                      },
+                        },
+                      ),
                     );
                   },
                 ),
@@ -259,11 +269,7 @@ class _EditBusListScreenState extends State<EditBusListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showCreateBusDialog,
-        tooltip: 'Create Bus',
-        child: const Icon(Icons.add),
-      ),
+      backgroundColor: Colors.transparent,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null
@@ -271,7 +277,24 @@ class _EditBusListScreenState extends State<EditBusListScreen> {
               : RefreshIndicator(
                   onRefresh: _loadScreenData,
                   child: _busesData.isEmpty
-                      ? const Center(child: Text('No buses found. Create one to get started.'))
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.directions_bus, size: 64, color: Colors.grey[400]),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'No buses found.',
+                                style: TextStyle(fontSize: 18),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Use "Create Bus" from the menu to add one.',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        )
                       : ListView.builder(
                           itemCount: _busesData.length,
                           itemBuilder: (context, index) {
@@ -284,6 +307,11 @@ class _EditBusListScreenState extends State<EditBusListScreen> {
                             final students = studentsData.map((s) => Student.fromMap(s)).toList();
                             return Card(
                               margin: const EdgeInsets.all(10),
+                              elevation: 4,
+                              color: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               child: Padding(
                                 padding: const EdgeInsets.all(12.0),
                                 child: Column(

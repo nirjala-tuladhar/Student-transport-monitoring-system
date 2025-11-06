@@ -1,0 +1,108 @@
+@startuml Student_Transport_Activity_Diagram
+skinparam linetype ortho
+skinparam backgroundColor #FEFEFE
+skinparam activityBackgroundColor #FFF8DC
+skinparam activityBorderColor #DAA520
+skinparam activityDiamondBackgroundColor #FFE4B5
+skinparam shadowing false
+
+title Bus Driver Daily Activity - Activity Diagram
+
+start
+
+:Driver logs into Bus Panel;
+
+:System loads assigned bus info;
+
+:System fetches list of assigned students;
+
+if (Students assigned?) then (yes)
+  :Display student list;
+else (no)
+  :Show "No students assigned" message;
+  stop
+endif
+
+:Driver starts bus route;
+
+:System starts tracking GPS location;
+
+fork
+  :Update location every 10 seconds;
+  
+  :Send location to database;
+  
+  :System calculates distance\nto each student's pickup point;
+  
+  if (Bus within 5 min of pickup?) then (yes)
+    :System sends ETA notification\nto parent;
+  endif
+  
+fork again
+  :Driver views student list;
+  
+  :Driver arrives at pickup point;
+  
+  :Student boards the bus;
+  
+  :Driver marks student as "Boarded";
+  
+  :System updates boarding status;
+  
+  :System sends notification to parent\n"Your child has boarded the bus";
+  
+end fork
+
+repeat
+  :Continue to next pickup point;
+  
+  :Pick up next student;
+  
+  :Mark as "Boarded";
+  
+repeat while (More students to pick up?) is (yes)
+->no;
+
+:All students picked up;
+
+:Drive to school;
+
+:Arrive at school;
+
+:Students get off the bus;
+
+repeat
+  :Mark student as "Dropped";
+  
+  :System sends drop notification\nto parent;
+  
+repeat while (More students to drop?) is (yes)
+->no;
+
+:All students dropped at school;
+
+note right
+  Same process repeats
+  for return journey
+  from school to home
+end note
+
+if (Return journey?) then (yes)
+  :Wait for school to end;
+  
+  :Start return journey;
+  
+  :Pick up students from school;
+  
+  :Drop students at home;
+  
+  :Mark all as "Dropped";
+endif
+
+:Driver ends shift;
+
+:Driver logs out;
+
+stop
+
+@enduml

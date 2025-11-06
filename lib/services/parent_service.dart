@@ -20,11 +20,14 @@ class ParentService {
     // Fetch student + bus info + bus stop coords (+school_id)
     final srow = await _supabase
         .from('students')
-        .select('id, name, bus_id, bus_stop, bus_stop_lat, bus_stop_lng, bus:bus_id(plate_number), school_id')
+        .select('id, name, bus_id, bus_stop, bus_stop_area, bus_stop_city, bus_stop_country, bus_stop_lat, bus_stop_lng, bus:bus_id(plate_number), school_id')
         .eq('id', studentId)
         .maybeSingle();
     if (srow == null) return null;
     final result = Map<String, dynamic>.from(srow);
+    
+    print('[ParentService] Student data: id=${result['id']}, bus_stop_lat=${result['bus_stop_lat']}, bus_stop_lng=${result['bus_stop_lng']}');
+    print('[ParentService] Bus stop: area=${result['bus_stop_area']}, city=${result['bus_stop_city']}, country=${result['bus_stop_country']}');
 
     // Try to fetch school coordinates (may be forbidden by RLS for parents).
     try {
@@ -132,29 +135,28 @@ class ParentService {
           .update({'bus_stop_lat': lat, 'bus_stop_lng': lng})
           .eq('id', studentId);
     } catch (e) {
-      // Log if parent role cannot update students due to RLS or other errors
-      // ignore: avoid_print
-      // Use debugPrint so it shows in Flutter logs
-      // Note: This won't expose sensitive data; only the error string
-      // and the student id to help diagnose policy/privilege issues.
-      // If this is too verbose, we can gate behind a debug flag.
-      // print('persistHomeCoords failed: $e');
-      // Prefer debugPrint in Flutter apps
-      // ignore: deprecated_member_use
-      // ignore_for_file: deprecated_member_use_from_same_package
-      // ignore_for_file: use_build_context_synchronously
-      // The above ignores are precautionary; primary intent is to surface the error.
-      // Using Supabase client directly is safe here.
-      // If needed, switch to a server-side RPC to enforce least privilege.
-      //
-      // Actual log:
-      // ignore: avoid_print
-      // print('persistHomeCoords error for student $studentId: $e');
-      // Using Supabase Flutter's logger-compatible output
-      // But to keep dependencies minimal, use debugPrint from foundation via Flutter
-      // however we are in a pure Dart file; still, debugPrint is available via flutter import in map_tab
-      // Here, fallback to print.
       print('persistHomeCoords error for student $studentId: $e');
+    }
+  }
+
+  Future<void> updateBusStopAddress({
+    required String studentId,
+    required String area,
+    required String city,
+    required String country,
+  }) async {
+    try {
+      await _supabase
+          .from('students')
+          .update({
+            'bus_stop_area': area,
+            'bus_stop_city': city,
+            'bus_stop_country': country,
+          })
+          .eq('id', studentId);
+    } catch (e) {
+      print('updateBusStopAddress error for student $studentId: $e');
+      rethrow;
     }
   }
 }

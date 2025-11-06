@@ -1,0 +1,60 @@
+@startuml Student_Transport_State_Diagram
+skinparam linetype ortho
+skinparam backgroundColor #FEFEFE
+skinparam stateBackgroundColor #FFE6E6
+skinparam stateBorderColor #DC143C
+skinparam shadowing false
+
+title Student Boarding Status - State Diagram
+
+[*] --> NotBoarded : Student Assigned to Bus
+
+state NotBoarded {
+  NotBoarded : Student is at home
+  NotBoarded : Waiting for bus
+}
+
+state Approaching {
+  Approaching : Bus is near pickup point
+  Approaching : ETA notification sent
+}
+
+state Boarded {
+  Boarded : Student on the bus
+  Boarded : Parent notified
+}
+
+state Dropped {
+  Dropped : Student reached destination
+  Dropped : Drop notification sent
+}
+
+NotBoarded --> Approaching : Bus within 5 min\nof pickup point
+
+Approaching --> Boarded : Student boards bus\nDriver marks status
+
+Boarded --> Dropped : Student dropped off\nDriver marks status
+
+Dropped --> NotBoarded : Next day\nStatus reset
+
+Boarded --> NotBoarded : Trip cancelled\nManual reset
+
+note right of Approaching
+  System automatically detects
+  when bus is near student's
+  bus stop location
+end note
+
+note right of Boarded
+  Driver manually updates
+  status when student
+  boards the bus
+end note
+
+note right of Dropped
+  Driver manually updates
+  status when student
+  is dropped off
+end note
+
+@enduml

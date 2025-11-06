@@ -3,23 +3,32 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  // Check if the current user logged in with an OTP and needs to set a password.
-  Future<bool> isFirstOtpLogin() async {
-    final user = _supabase.auth.currentUser;
-    if (user == null) {
+  // Verify OTP is valid and not used (before attempting login)
+  Future<bool> verifyOtpNotUsed(String email, String otpCode) async {
+    try {
+      // Use admin client to check OTP status before login
+      final response = await _adminSupabase
+          .from('parent_otps')
+          .select('id, is_used, expires_at, user_id')
+          .eq('otp_code', otpCode)
+          .eq('is_used', false)
+          .maybeSingle();
+
+      if (response == null) return false;
+
+      // Check if OTP is expired
+      final expiresAt = DateTime.parse(response['expires_at'] as String);
+      if (DateTime.now().isAfter(expiresAt)) return false;
+
+      // Verify the OTP belongs to a user with this email
+      final userId = response['user_id'] as String;
+      final userResponse = await _adminSupabase.auth.admin.getUserById(userId);
+      if (userResponse.user?.email != email) return false;
+
+      return true;
+    } catch (e) {
       return false;
     }
-
-    // Check for an active OTP for this user.
-    final response = await _supabase
-        .from('parent_otps')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('is_used', false)
-        .maybeSingle();
-
-    // If an active OTP record exists, this is their first login.
-    return response != null;
   }
 
   // Mark the OTP as used after the password has been successfully set.
@@ -31,7 +40,8 @@ class AuthService {
     await _supabase
         .from('parent_otps')
         .update({'is_used': true})
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .eq('is_used', false); // Only update if not already used
   }
 
   // Admin client for privileged operations

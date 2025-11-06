@@ -131,7 +131,11 @@ class _NotificationTile extends StatelessWidget {
     final time = NotificationLogService.formatTime(item.timestamp);
     return ListTile(
       leading: Icon(icon),
-      title: Text(item.message),
+      title: Text(
+        item.message,
+        overflow: TextOverflow.ellipsis,
+        maxLines: 2,
+      ),
       subtitle: Text(time),
       dense: true,
     );

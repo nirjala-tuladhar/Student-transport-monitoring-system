@@ -72,29 +72,8 @@ class _AuthHandlerState extends State<AuthHandler> {
 
   @override
   Widget build(BuildContext context) {
-    // This widget handles the initial auth state.
-    // If a user is already logged in, they are sent to the home screen.
-    // Otherwise, they see the login screen.
-    return StreamBuilder<AuthState>(
-      stream: supabase.auth.onAuthStateChange,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-
-        if (snapshot.hasData && snapshot.data?.session != null) {
-          // User is logged in -> show dashboard shell with tabs
-          return SchoolAdminApp(onLogout: () async {
-            await Supabase.instance.client.auth.signOut();
-            if (context.mounted) {
-              Navigator.of(context).pushNamedAndRemoveUntil('/login', (r) => false);
-            }
-          });
-        }
-
-        // User is not logged in.
-        return const SchoolAdminLoginScreen();
-      },
-    );
+    // Always show login screen first
+    // User must explicitly log in to access the dashboard
+    return const SchoolAdminLoginScreen();
   }
 }

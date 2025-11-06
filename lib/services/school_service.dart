@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/bus.dart';
 import '../models/driver.dart';
@@ -258,18 +260,26 @@ class SchoolService {
   // Create a new student with OTP-based parent invitations
   Future<void> createStudent({
     required String name,
-    required String busStop,
+    required String busStopArea,
+    required String busStopCity,
+    required String busStopCountry,
     required String parent1Email,
     String? parent2Email,
   }) async {
     final schoolId = await _getUserSchoolId();
     if (schoolId == null) throw Exception('Could not determine school');
 
+    // Build geocoding query from structured address
+    final addressParts = [busStopArea, busStopCity, busStopCountry]
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
+    final query = addressParts.join(', ');
+    
     // Geocode bus stop (best-effort)
     double? stopLat;
     double? stopLng;
     try {
-      final geo = await GeocodingService().geocodeAddress(busStop);
+      final geo = await GeocodingService().geocodeAddress(query);
       if (geo != null) {
         stopLat = geo.lat;
         stopLng = geo.lon;
@@ -282,7 +292,10 @@ class SchoolService {
         .insert({
           'name': name,
           'school_id': schoolId,
-          'bus_stop': busStop,
+          'bus_stop_area': busStopArea,
+          'bus_stop_city': busStopCity,
+          'bus_stop_country': busStopCountry,
+          'bus_stop': query, // Legacy field for backward compatibility
           'bus_stop_lat': stopLat,
           'bus_stop_lng': stopLng,
           'parent1_email': parent1Email,
@@ -353,31 +366,137 @@ class SchoolService {
     }
   }
 
+  // Upload school logo (for mobile - File based)
+  Future<String> uploadSchoolLogo({
+    required String schoolId,
+    required File imageFile,
+  }) async {
+    try {
+      final fileName = 'school_${schoolId}_logo_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final path = 'school_logos/$fileName';
+      
+      // Upload to Supabase Storage
+      await _supabase.storage.from('public').upload(
+        path,
+        imageFile,
+        fileOptions: const FileOptions(upsert: true),
+      );
+      
+      // Get public URL
+      final publicUrl = _supabase.storage.from('public').getPublicUrl(path);
+      
+      // Update school record with logo URL
+      await _supabase.from('schools').update({
+        'logo_url': publicUrl,
+      }).eq('id', schoolId);
+      
+      return publicUrl;
+    } catch (e) {
+      throw Exception('Failed to upload logo: $e');
+    }
+  }
+
+  // Upload school logo (for web - Bytes based)
+  Future<String> uploadSchoolLogoBytes({
+    required String schoolId,
+    required Uint8List imageBytes,
+    required String fileName,
+  }) async {
+    try {
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final extension = fileName.split('.').last;
+      final newFileName = 'school_${schoolId}_logo_$timestamp.$extension';
+      final path = 'school_logos/$newFileName';
+      
+      // Upload to Supabase Storage
+      await _supabase.storage.from('public').uploadBinary(
+        path,
+        imageBytes,
+        fileOptions: FileOptions(
+          upsert: true,
+          contentType: 'image/$extension',
+        ),
+      );
+      
+      // Get public URL
+      final publicUrl = _supabase.storage.from('public').getPublicUrl(path);
+      
+      // Update school record with logo URL
+      await _supabase.from('schools').update({
+        'logo_url': publicUrl,
+      }).eq('id', schoolId);
+      
+      return publicUrl;
+    } catch (e) {
+      throw Exception('Failed to upload logo: $e');
+    }
+  }
+
   // Update school profile
   Future<void> updateSchoolProfile({
     required String id,
     required String name,
     required String address,
+    double? manualLat,
+    double? manualLng,
   }) async {
-    // Best-effort geocoding
     double? lat;
     double? lon;
-    try {
-      // Use combined query for better accuracy: "name, City, Country"
-      final query = [name, address].where((e) => e.trim().isNotEmpty).join(', ');
-      final geo = await GeocodingService().geocodeAddress(query);
-      if (geo != null) {
-        lat = geo.lat;
-        lon = geo.lon;
+    
+    // Use manual coordinates if provided
+    if (manualLat != null && manualLng != null) {
+      lat = manualLat;
+      lon = manualLng;
+      print('[SchoolService] ✅ Using manual coordinates: $lat, $lon');
+    } else {
+      // Best-effort geocoding - try most specific first
+      try {
+        var geo;
+        
+        // Strategy 1: Try full address (most specific)
+        if (address.isNotEmpty) {
+          print('[SchoolService] Geocoding attempt 1 (address only): "$address"');
+          geo = await GeocodingService().geocodeAddress(address);
+        }
+        
+        // Strategy 2: Only if address failed, try school name + address
+        if (geo == null && name.isNotEmpty && address.isNotEmpty) {
+          final query = '$name, $address';
+          print('[SchoolService] Geocoding attempt 2 (name + address): "$query"');
+          geo = await GeocodingService().geocodeAddress(query);
+        }
+        
+        // Strategy 3: Last resort - try just the last part (city, country)
+        if (geo == null && address.contains(',')) {
+          final parts = address.split(',').map((e) => e.trim()).toList();
+          if (parts.length >= 2) {
+            // Try last 2 parts (City, Country)
+            final fallback = parts.sublist(parts.length - 2).join(', ');
+            print('[SchoolService] Geocoding attempt 3 (fallback to city): "$fallback"');
+            geo = await GeocodingService().geocodeAddress(fallback);
+          }
+        }
+        
+        if (geo != null) {
+          lat = geo.lat;
+          lon = geo.lon;
+          print('[SchoolService] ✅ Geocoded successfully: $lat, $lon');
+        } else {
+          print('[SchoolService] ⚠️ All geocoding attempts failed');
+        }
+      } catch (e) {
+        print('[SchoolService] ❌ Geocoding error: $e');
       }
-    } catch (_) {}
+    }
 
+    print('[SchoolService] Updating school with lat: $lat, lon: $lon');
     await _supabase.from('schools').update({
       'name': name,
       'address': address,
       'latitude': lat,
       'longitude': lon,
     }).eq('id', id);
+    print('[SchoolService] ✅ School profile updated');
   }
 
   // Mark first login as complete for the current school admin

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../services/auth_service.dart'; // Import AuthService
+import '../../services/auth_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/animated_widgets.dart';
+import '../../widgets/common_widgets.dart';
 
-// Use the global authService instance from main_parent.dart
 final authService = AuthService();
 
 class SetPasswordScreen extends StatefulWidget {
@@ -61,50 +63,129 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Set Your Permanent Password')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('Welcome! Please set a new password to secure your account.'),
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'New Password'),
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Password is required';
-                  if (v.length < 6) return 'Password must be at least 6 characters';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _confirmPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Confirm New Password'),
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Please confirm your password';
-                  if (v != _passwordController.text) return 'Passwords do not match';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 24),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(_error!, style: const TextStyle(color: Colors.red)),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(gradient: AppTheme.primaryGradient),
+        ),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock_reset_rounded, size: 24, color: Colors.white),
+            SizedBox(width: 12),
+            Text(
+              'Set Password',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 20, color: Colors.white),
+            ),
+          ],
+        ),
+        centerTitle: true,
+      ),
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppTheme.subtleGradient),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 500),
+              child: FadeInAnimation(
+                child: AnimatedCard(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryBlue.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppTheme.primaryBlue.withOpacity(0.2)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  gradient: AppTheme.primaryGradient,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(Icons.security_rounded, color: Colors.white, size: 28),
+                              ),
+                              const SizedBox(width: 16),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Secure Your Account', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
+                                    SizedBox(height: 4),
+                                    Text('Set a permanent password to continue', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+                        ModernTextField(
+                          controller: _passwordController,
+                          label: 'New Password',
+                          hint: 'Enter your password',
+                          prefixIcon: Icons.lock_outline_rounded,
+                          obscureText: true,
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return 'Password is required';
+                            if (v.length < 6) return 'Password must be at least 6 characters';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 20),
+                        ModernTextField(
+                          controller: _confirmPasswordController,
+                          label: 'Confirm Password',
+                          hint: 'Re-enter your password',
+                          prefixIcon: Icons.lock_reset_rounded,
+                          obscureText: true,
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return 'Please confirm your password';
+                            if (v != _passwordController.text) return 'Passwords do not match';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 28),
+                        if (_error != null)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppTheme.error.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppTheme.error.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.error_outline_rounded, color: AppTheme.error, size: 22),
+                                const SizedBox(width: 12),
+                                Expanded(child: Text(_error!, style: TextStyle(color: AppTheme.error, fontSize: 14, fontWeight: FontWeight.w500))),
+                              ],
+                            ),
+                          ),
+                        AnimatedButton(
+                          text: 'Save Password',
+                          icon: Icons.check_circle_rounded,
+                          onPressed: _loading ? null : _submit,
+                          isLoading: _loading,
+                          backgroundColor: AppTheme.success,
+                          width: double.infinity,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ElevatedButton(
-                onPressed: _loading ? null : _submit,
-                child: _loading
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Save Password and Continue'),
               ),
-            ],
+            ),
           ),
         ),
       ),

@@ -6,6 +6,7 @@ class School {
   final String? address;
   final double? latitude;
   final double? longitude;
+  final String? logoUrl;
 
   School({
     required this.id,
@@ -15,6 +16,7 @@ class School {
     this.address,
     this.latitude,
     this.longitude,
+    this.logoUrl,
   });
 
   factory School.fromMap(Map<String, dynamic> map) {
@@ -26,6 +28,7 @@ class School {
       address: map['address'],
       latitude: (map['latitude'] is num) ? (map['latitude'] as num).toDouble() : (map['latitude'] is String ? double.tryParse(map['latitude']) : null),
       longitude: (map['longitude'] is num) ? (map['longitude'] as num).toDouble() : (map['longitude'] is String ? double.tryParse(map['longitude']) : null),
+      logoUrl: map['logo_url'],
     );
   }
 
@@ -38,6 +41,7 @@ class School {
       'address': address,
       'latitude': latitude,
       'longitude': longitude,
+      'logo_url': logoUrl,
     };
   }
 }

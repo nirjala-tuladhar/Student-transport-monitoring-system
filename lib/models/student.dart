@@ -5,7 +5,10 @@ class Student {
   final String schoolId;
   final String? busId;
   final String name;
-  final String? busStop;
+  final String? busStop; // Legacy field
+  final String? busStopArea;
+  final String? busStopCity;
+  final String? busStopCountry;
   final double? busStopLat;
   final double? busStopLng;
   final Uint8List? fingerprintData;
@@ -19,6 +22,9 @@ class Student {
     this.busId,
     required this.name,
     this.busStop,
+    this.busStopArea,
+    this.busStopCity,
+    this.busStopCountry,
     this.busStopLat,
     this.busStopLng,
     this.fingerprintData,
@@ -58,6 +64,9 @@ class Student {
       busId: map['bus_id'],
       name: map['name'],
       busStop: map['bus_stop'],
+      busStopArea: map['bus_stop_area'],
+      busStopCity: map['bus_stop_city'],
+      busStopCountry: map['bus_stop_country'],
       busStopLat: (map['bus_stop_lat'] is num) ? (map['bus_stop_lat'] as num).toDouble() : (map['bus_stop_lat'] is String ? double.tryParse(map['bus_stop_lat']) : null),
       busStopLng: (map['bus_stop_lng'] is num) ? (map['bus_stop_lng'] as num).toDouble() : (map['bus_stop_lng'] is String ? double.tryParse(map['bus_stop_lng']) : null),
       fingerprintData: _parseFingerprint(map['fingerprint_data']),
@@ -73,6 +82,9 @@ class Student {
       'bus_id': busId,
       'name': name,
       'bus_stop': busStop,
+      'bus_stop_area': busStopArea,
+      'bus_stop_city': busStopCity,
+      'bus_stop_country': busStopCountry,
       'bus_stop_lat': busStopLat,
       'bus_stop_lng': busStopLng,
       'fingerprint_data': fingerprintData,
