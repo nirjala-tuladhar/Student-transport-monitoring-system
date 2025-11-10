@@ -9,6 +9,13 @@ import 'geocoding_service.dart';
 
 class SchoolService {
   final SupabaseClient _supabase = Supabase.instance.client;
+  
+  // Admin client for privileged operations (must be defined before use)
+  final SupabaseClient _adminSupabase = SupabaseClient(
+    'https://nnjjefycskerdjqmatkf.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5uamplZnljc2tlcmRqcW1hdGtmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MjYyNTQ3NiwiZXhwIjoyMDY4MjAxNDc2fQ.nGXxDihQI6LDVWi8M8rnYAcmHXaIZF2DvSfSITGMBmw',
+  );
+  
   // Parent web app origin used for password set/reset redirects
   // TODO: externalize via config if environments vary
   static const String kParentAppOrigin = 'http://localhost:3000';
@@ -23,6 +30,7 @@ class SchoolService {
     } catch (e) {
       throw Exception('Failed to create school: $e');
     }
+  }
 
   // Resend parent invite helper
   Future<void> resendParentInvite(String email) async {
@@ -35,13 +43,6 @@ class SchoolService {
       throw Exception('Failed to resend invite: $e');
     }
   }
-  }
-
-  // Admin client for privileged operations
-  final SupabaseClient _adminSupabase = SupabaseClient(
-    'https://nnjjefycskerdjqmatkf.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5uamplZnljc2tlcmRqcW1hdGtmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MjYyNTQ3NiwiZXhwIjoyMDY4MjAxNDc2fQ.nGXxDihQI6LDVWi8M8rnYAcmHXaIZF2DvSfSITGMBmw',
-  );
 
   // Get the current school for the logged-in admin
   Future<School?> getSchool() async {
